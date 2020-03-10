@@ -3,7 +3,7 @@
 VERSION=${1:-"latest"}
 COMMIT=$2
 DOCKER_REGISTRY=quay.io
-REPO=${DOCKER_REGISTRY}/enmasse/systemtests-external-clients
+REPO=${DOCKER_REGISTRY}/enmasse/systemtests-external-client
 
 if [ -n "${TRAVIS_TAG}" ]
 then

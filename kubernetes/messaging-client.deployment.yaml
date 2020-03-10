@@ -19,7 +19,7 @@ spec:
     spec:
       containers:
         - name: messaging-client
-          image: quay.io/enmasse/systemtests-external-clients:latest
+          image: quay.io/enmasse/systemtests-external-client:latest
           command: ["/bin/sh"]
           args: ["-c", "java -jar /messaging-client.jar"]
           ports:
