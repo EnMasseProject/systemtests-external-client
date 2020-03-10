@@ -1,0 +1,40 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: messaging-client
+  labels:
+    app: test-clients
+    client: messaging-client
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: test-clients
+      client: messaging-client
+  template:
+    metadata:
+      labels:
+        app: test-clients
+        client: messaging-client
+    spec:
+      containers:
+        - name: messaging-client
+          image: quay.io/enmasse/systemtests-external-clients:latest
+          command: ["/bin/sh"]
+          args: ["-c", "java -jar /messaging-client.jar"]
+          ports:
+            - name: metrics
+              containerPort: 8080
+          env:
+            - name:  amqp-hostname
+              value: localhost
+            - name:  amqp-port
+              value: 5671
+            - name:  amqp-username
+              value: user
+            - name:  amqp-password
+              value: pwd
+            - name:  amqp-addresses
+              value: test-queue-1,test-queue-2,test-anycast-1,test-anycast-2
+            - name:  amqp-links-per-conn
+              value: 3
