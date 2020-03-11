@@ -1,11 +1,13 @@
 package io.enmasse.test;
 
+import java.util.Arrays;
+
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
 public class MessagingConfiguration {
 
-	private static final Logger log = LoggerFactory.getLogger(MessagingConfiguration.class);
+    private static final Logger log = LoggerFactory.getLogger(MessagingConfiguration.class);
     private String hostname;
     private int port;
     private String username;
@@ -15,10 +17,10 @@ public class MessagingConfiguration {
     private int linksPerConnection;
 
     public MessagingConfiguration() {
-		// empty
-	}
+        // empty
+    }
 
-	public String getHostname() {
+    public String getHostname() {
         return hostname;
     }
 
@@ -35,14 +37,14 @@ public class MessagingConfiguration {
     }
 
     public String[] getAddresses() {
-		return addresses;
-	}
-
-    public int getLinksPerConnection() {
-    	return linksPerConnection;
+        return addresses;
     }
 
-	public static MessagingConfiguration fromEnv() {
+    public int getLinksPerConnection() {
+        return linksPerConnection;
+    }
+
+    public static MessagingConfiguration fromEnv() {
         log.info("Loading configuration from environment variables");
 
         var c = new MessagingConfiguration();
@@ -55,7 +57,15 @@ public class MessagingConfiguration {
 
         c.linksPerConnection = Integer.parseInt(System.getenv().getOrDefault("amqp-links-per-conn", "1"));
 
+        log.info(c.toString());
         return c;
+    }
+
+    @Override
+    public String toString() {
+        return "MessagingConfiguration [addresses=" + Arrays.toString(addresses) + ", hostname=" + hostname
+                + ", linksPerConnection=" + linksPerConnection + ", password=" + password + ", port=" + port
+                + ", username=" + username + "]";
     }
 
 }

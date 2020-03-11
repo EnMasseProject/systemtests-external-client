@@ -106,6 +106,8 @@ public class ProbeClient extends AbstractVerticle {
                         successCounter.inc();
                     } else {
                         failureCounter.inc();
+                        System.out.println(result.cause().getMessage());
+                        result.cause().printStackTrace();
                     }
                     completed.countDown();
                 });
