@@ -55,6 +55,16 @@ public class MessagingClient extends AbstractVerticle {
             .help("N/A")
             .register();
 
+    private static final Counter reconnectSuccesses = Counter.build()
+            .name("test_reconnect_success_total")
+            .help("N/A")
+            .register();
+
+    private static final Counter reconnectFailures = Counter.build()
+            .name("test_reconnect_failure_total")
+            .help("N/A")
+            .register();
+
     private static final Counter attaches = Counter.build()
             .name("test_attaches_total")
             .help("N/A")
@@ -175,6 +185,9 @@ public class MessagingClient extends AbstractVerticle {
     		connectResult -> {
             if (connectResult.succeeded()) {
                 connectSuccesses.inc();
+                if (startPromise == null) { //coming from reconnect
+                    reconnectSuccesses.inc();
+                }
                 ProtonConnection connection = connectResult.result();
                 connection.openHandler(openResult -> {
                     if (openResult.succeeded()) {
@@ -199,7 +212,8 @@ public class MessagingClient extends AbstractVerticle {
                         connectFailures.inc();
                         if (startPromise != null) {
                             startPromise.fail(connectResult.cause());
-                        } else {
+                        } else { //coming from reconnect
+                            reconnectFailures.inc();
                             connection.disconnect();
                         }
                     }
@@ -234,7 +248,8 @@ public class MessagingClient extends AbstractVerticle {
                 connectFailures.inc();
                 if (startPromise != null) {
                     startPromise.fail(connectResult.cause());
-                } else {
+                } else { //coming from reconnect
+                    reconnectFailures.inc();
                     reconnectFn.run();
                 }
             }
@@ -386,15 +401,19 @@ public class MessagingClient extends AbstractVerticle {
                 log.info("Failed connects = " + connectFailures.get());
                 log.info("Disconnects = " + disconnects.get());
                 log.info("Reconnects = " + reconnects.get());
+                log.info("Successful reconnects = " + reconnectSuccesses.get());
+                log.info("Failed reconnects = " + reconnectFailures.get());
                 log.info("Reconnect duration (anycast) 99p = " + reconnectTime.get(AddressType.anycast).getValueAtPercentile(percentile));
                 log.info("Reconnect duration (queue) 99p = " + reconnectTime.get(AddressType.queue).getValueAtPercentile(percentile));
                 log.info("Reattach duration (anycast) 99p = " + reconnectTime.get(AddressType.anycast).getValueAtPercentile(percentile));
                 log.info("Reattach duration (queue) 99p = " + reconnectTime.get(AddressType.queue).getValueAtPercentile(percentile));
                 log.info("Num accepted anycast = " + numAccepted.labels(AddressType.anycast.name()).get());
+                log.info("Num received anycast = " + numReceived.labels(AddressType.anycast.name()).get());
                 log.info("Num rejected anycast = " + numRejected.labels(AddressType.anycast.name()).get());
                 log.info("Num modified anycast = " + numModified.labels(AddressType.anycast.name()).get());
                 log.info("Num released anycast = " + numReleased.labels(AddressType.anycast.name()).get());
                 log.info("Num accepted queue = " + numAccepted.labels(AddressType.queue.name()).get());
+                log.info("Num received queue = " + numReceived.labels(AddressType.queue.name()).get());
                 log.info("Num rejected queue = " + numRejected.labels(AddressType.queue.name()).get());
                 log.info("Num modified queue = " + numModified.labels(AddressType.queue.name()).get());
                 log.info("Num released queue = " + numReleased.labels(AddressType.queue.name()).get());
