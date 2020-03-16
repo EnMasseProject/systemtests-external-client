@@ -14,7 +14,12 @@ public class MessagingConfiguration {
     private String password;
     private String[] addresses;
 
+    //messaging-client
     private int linksPerConnection;
+
+    //tenant-client
+    private int addressesPerTenant;
+    private int sendMessagePeriod; //milliseconds
 
     public MessagingConfiguration() {
         // empty
@@ -44,6 +49,14 @@ public class MessagingConfiguration {
         return linksPerConnection;
     }
 
+    public int getAddressesPerTenant() {
+        return addressesPerTenant;
+    }
+
+    public int getSendMessagePeriod() {
+        return sendMessagePeriod;
+    }
+
     public static MessagingConfiguration fromEnv() {
         log.info("Loading configuration from environment variables");
 
@@ -57,15 +70,19 @@ public class MessagingConfiguration {
 
         c.linksPerConnection = Integer.parseInt(System.getenv().getOrDefault("amqp-links-per-conn", "1"));
 
+        c.addressesPerTenant = Integer.parseInt(System.getenv().getOrDefault("amqp-addr-per-tenant", "5"));
+        c.sendMessagePeriod = Integer.parseInt(System.getenv().getOrDefault("amqp-send-msg-period", "2000"));
+
         log.info(c.toString());
         return c;
     }
 
     @Override
     public String toString() {
-        return "MessagingConfiguration [addresses=" + Arrays.toString(addresses) + ", hostname=" + hostname
-                + ", linksPerConnection=" + linksPerConnection + ", password=" + password + ", port=" + port
-                + ", username=" + username + "]";
+        return "MessagingConfiguration [hostname=" + hostname + ", port=" + port + ", username=" + username
+                + ", password=" + password + ", addresses=" + Arrays.toString(addresses) + ", linksPerConnection="
+                + linksPerConnection + ", addressesPerTenant=" + addressesPerTenant + ", sendMessagePeriod="
+                + sendMessagePeriod + "]";
     }
 
 }

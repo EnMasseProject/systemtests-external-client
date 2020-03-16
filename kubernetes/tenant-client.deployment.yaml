@@ -1,0 +1,42 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: tenant-client
+  labels:
+    app: test-clients
+    client: tenant-client
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: test-clients
+      client: tenant-client
+  template:
+    metadata:
+      labels:
+        app: test-clients
+        client: tenant-client
+    spec:
+      containers:
+        - name: tenant-client
+          image: quay.io/enmasse/systemtests-external-client:latest
+          command: ["/bin/sh"]
+          args: ["-c", "java -jar /tenant-client.jar"]
+          ports:
+            - name: metrics
+              containerPort: 8080
+          env:
+            - name:  amqp-hostname
+              value: localhost
+            - name:  amqp-port
+              value: 5671
+            - name:  amqp-username
+              value: user
+            - name:  amqp-password
+              value: pwd
+            - name:  amqp-addresses
+              value: test-queue-1,test-queue-2,test-anycast-1,test-anycast-2
+            - name:  amqp-amqp-addr-per-tenant
+              value: 2
+            - name: amqp-send-msg-period
+              value: 30000
