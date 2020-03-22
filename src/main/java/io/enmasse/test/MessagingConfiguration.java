@@ -20,6 +20,8 @@ public class MessagingConfiguration {
     //tenant-client
     private int addressesPerTenant;
     private int sendMessagePeriod; //milliseconds
+    private int receiversPerTenant;
+    private int sendersPerTenant;
 
     public MessagingConfiguration() {
         // empty
@@ -57,6 +59,14 @@ public class MessagingConfiguration {
         return sendMessagePeriod;
     }
 
+	public int getReceiversPerTenant() {
+		return receiversPerTenant;
+	}
+
+	public int getSendersPerTenant() {
+		return sendersPerTenant;
+	}
+
     public static MessagingConfiguration fromEnv() {
         log.info("Loading configuration from environment variables");
 
@@ -72,6 +82,8 @@ public class MessagingConfiguration {
 
         c.addressesPerTenant = Integer.parseInt(System.getenv().getOrDefault("amqp-addr-per-tenant", "5"));
         c.sendMessagePeriod = Integer.parseInt(System.getenv().getOrDefault("amqp-send-msg-period", "2000"));
+        c.receiversPerTenant = Integer.parseInt(System.getenv().getOrDefault("amqp-receivers-per-tenant", "1"));
+        c.sendersPerTenant = Integer.parseInt(System.getenv().getOrDefault("amqp-senders-per-tenant", "1"));
 
         log.info(c.toString());
         return c;
@@ -79,10 +91,11 @@ public class MessagingConfiguration {
 
     @Override
     public String toString() {
-        return "MessagingConfiguration [hostname=" + hostname + ", port=" + port + ", username=" + username
-                + ", password=" + password + ", addresses=" + Arrays.toString(addresses) + ", linksPerConnection="
-                + linksPerConnection + ", addressesPerTenant=" + addressesPerTenant + ", sendMessagePeriod="
-                + sendMessagePeriod + "]";
+        return "MessagingConfiguration [addresses=" + Arrays.toString(addresses) + ", addressesPerTenant="
+                + addressesPerTenant + ", hostname=" + hostname + ", linksPerConnection=" + linksPerConnection
+                + ", password=" + password + ", port=" + port + ", receiversPerTenant=" + receiversPerTenant
+                + ", sendMessagePeriod=" + sendMessagePeriod + ", sendersPerTenant=" + sendersPerTenant + ", username="
+                + username + "]";
     }
 
 }

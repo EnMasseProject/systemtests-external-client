@@ -8,6 +8,7 @@ import java.util.Map;
 import java.util.concurrent.TimeUnit;
 import java.util.concurrent.atomic.AtomicLong;
 import java.util.stream.Collectors;
+import java.util.stream.IntStream;
 import java.util.stream.Stream;
 
 import org.HdrHistogram.AtomicHistogram;
@@ -392,7 +393,7 @@ public class TenantClient extends AbstractVerticle{
         Vertx vertx = Vertx.vertx();
 
         for (List<Address> tenatAddresses : tenants) {
-        	deployClients(vertx, new ConnectionConfig(config), tenatAddresses);
+            deployTenantClients(vertx, new ConnectionConfig(config), tenatAddresses, config.getReceiversPerTenant(), config.getSendersPerTenant());
         }
 
         while (true) {
@@ -426,24 +427,28 @@ public class TenantClient extends AbstractVerticle{
         }
     }
 
-    private static void deployClients(Vertx vertx, ConnectionConfig config, List<Address> addressList) throws InterruptedException {
+    private static void deployTenantClients(Vertx vertx, ConnectionConfig config, List<Address> addressList, int tenantReceivers, int tenantSenders) throws InterruptedException {
 
-        vertx.deployVerticle(new TenantClient(config, LinkType.receiver, addressList), result -> {
-            if (result.succeeded()) {
-                log.info("Started receiver client for addresses " + addressList);
-            } else {
-                log.warn("Failed starting receiver client for addresses " + addressList);
-            }
+        IntStream.range(0, tenantReceivers).forEach( i -> {
+            vertx.deployVerticle(new TenantClient(config, LinkType.receiver, addressList), result -> {
+                if (result.succeeded()) {
+                    log.info("Started receiver client for addresses " + addressList);
+                } else {
+                    log.warn("Failed starting receiver client for addresses " + addressList);
+                }
+            });
         });
 
         Thread.sleep(10);
 
-        vertx.deployVerticle(new TenantClient(config, LinkType.sender, addressList), result -> {
-            if (result.succeeded()) {
-                log.info("Started sender client for addresses " + addressList);
-            } else {
-                log.warn("Failed starting sender client for addresses " + addressList);
-            }
+        IntStream.range(0, tenantSenders).forEach( i -> {
+            vertx.deployVerticle(new TenantClient(config, LinkType.sender, addressList), result -> {
+                if (result.succeeded()) {
+                    log.info("Started sender client for addresses " + addressList);
+                } else {
+                    log.warn("Failed starting sender client for addresses " + addressList);
+                }
+            });
         });
 
     }
