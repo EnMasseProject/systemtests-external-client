@@ -5,8 +5,10 @@ import java.util.ArrayList;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
+import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.TimeUnit;
 import java.util.concurrent.atomic.AtomicLong;
+import java.util.function.Consumer;
 import java.util.stream.Collectors;
 import java.util.stream.IntStream;
 import java.util.stream.Stream;
@@ -28,6 +30,7 @@ import io.vertx.core.Vertx;
 import io.vertx.proton.ProtonClient;
 import io.vertx.proton.ProtonClientOptions;
 import io.vertx.proton.ProtonConnection;
+import io.vertx.proton.ProtonLink;
 import io.vertx.proton.ProtonReceiver;
 import io.vertx.proton.ProtonSender;
 
@@ -127,6 +130,8 @@ public class TenantClient extends AbstractVerticle{
             .help("N/A")
             .labelNames("addressType")
             .register();
+
+    private static final Map<String, LinkInfo> numReceivedPerLink = new ConcurrentHashMap<>();
 
     private static final double percentile = 99.0;
 
@@ -268,7 +273,7 @@ public class TenantClient extends AbstractVerticle{
             });
         };
 
-        Runnable handleAttachFn = () -> {
+        Consumer<ProtonLink<?>> handleAttachFn = (link) -> {
             // System.out.println("Attached " + linkType + " to " + address);
             attaches.inc();
             // We've been reattached. Record how long it took
@@ -278,6 +283,10 @@ public class TenantClient extends AbstractVerticle{
                 reattachDelay.get(address.getAddress()).set(1);
                 reattachTime.get(address.getAddressType()).recordValue(TimeUnit.NANOSECONDS.toMillis(duration));
                 reattachHist.labels(address.getAddressType().name()).observe(toSeconds(duration));
+                if (linkType == LinkType.receiver) {
+                    log.info("key of reattached receiver is {}", String.format("%s.%s.%s", connection.getContainer(), link.getName(), address.getAddress()));
+                    markLinkAsReattached(connection.getContainer(), link, address.getAddress());
+                }
             }
         };
 
@@ -287,7 +296,7 @@ public class TenantClient extends AbstractVerticle{
             ProtonReceiver receiver = connection.createReceiver(address.getAddress());
             receiver.openHandler(receiverAttachResult -> {
                 if (receiverAttachResult.succeeded()) {
-                    handleAttachFn.run();
+                    handleAttachFn.accept(receiverAttachResult.result());
                 } else {
                     reattachFn.run();
                 }
@@ -295,25 +304,28 @@ public class TenantClient extends AbstractVerticle{
             receiver.detachHandler(detachResult -> {
                 log.debug("Detached " + linkType + " for " + address + "!");
                 detaches.inc();
+                markLinkAsDetached(connection.getContainer(), receiver, address.getAddress());
                 lastDetach.get(address.getAddress()).set(System.nanoTime());
                 reattachFn.run();
             });
             receiver.closeHandler(closeResult -> {
                 log.debug("Closed " + linkType + " for " + address + "!");
                 detaches.inc();
+                markLinkAsDetached(connection.getContainer(), receiver, address.getAddress());
                 lastDetach.get(address.getAddress()).set(System.nanoTime());
                 reattachFn.run();
             });
             receiver.handler((protonDelivery, message) -> {
                 //System.out.println("Received message from " + address);
                 numReceived.labels(address.getAddressType().name()).inc();
+                countMessageReceived(connection.getContainer(), receiver, address.getAddress());
             });
             receiver.open();
         } else {
             ProtonSender sender = connection.createSender(address.getAddress());
             sender.openHandler(senderAttachResult -> {
                 if (senderAttachResult.succeeded()) {
-                    handleAttachFn.run();
+                    handleAttachFn.accept(senderAttachResult.result());
                     sendMessage(address, sender);
                 } else {
                     reattachFn.run();
@@ -406,10 +418,12 @@ public class TenantClient extends AbstractVerticle{
                 log.info("Reconnects = " + reconnects.get());
                 log.info("Successful reconnects = " + reconnectSuccesses.get());
                 log.info("Failed reconnects = " + reconnectFailures.get());
-                log.info("Reconnect duration (anycast) 99p = " + reconnectTime.getValueAtPercentile(percentile));
-                log.info("Reconnect duration (queue) 99p = " + reconnectTime.getValueAtPercentile(percentile));
-                log.info("Reattach duration (anycast) 99p = " + reconnectTime.getValueAtPercentile(percentile));
-                log.info("Reattach duration (queue) 99p = " + reconnectTime.getValueAtPercentile(percentile));
+                log.info("Attaches = " + attaches.get());
+                log.info("Detaches = " + detaches.get());
+                log.info("Reattaches = " + reattaches.get());
+                log.info("Reconnect duration 99p = " + reconnectTime.getValueAtPercentile(percentile));
+                log.info("Reattach duration (anycast) 99p = " + reattachTime.get(AddressType.anycast).getValueAtPercentile(percentile));
+                log.info("Reattach duration (queue) 99p = " + reattachTime.get(AddressType.queue).getValueAtPercentile(percentile));
                 log.info("Num accepted anycast = " + numAccepted.labels(AddressType.anycast.name()).get());
                 log.info("Num received anycast = " + numReceived.labels(AddressType.anycast.name()).get());
                 log.info("Num rejected anycast = " + numRejected.labels(AddressType.anycast.name()).get());
@@ -420,6 +434,10 @@ public class TenantClient extends AbstractVerticle{
                 log.info("Num rejected queue = " + numRejected.labels(AddressType.queue.name()).get());
                 log.info("Num modified queue = " + numModified.labels(AddressType.queue.name()).get());
                 log.info("Num released queue = " + numReleased.labels(AddressType.queue.name()).get());
+                log.info("Num received per link");
+                numReceivedPerLink.entrySet().forEach(link -> {
+                    log.info("Link {} info {}", link.getKey(), link.getValue().toString());
+                });
                 log.info("##########");
             } catch (Exception e) {
                 e.printStackTrace();
@@ -451,6 +469,34 @@ public class TenantClient extends AbstractVerticle{
             });
         });
 
+    }
+
+    private static void countMessageReceived(String container, ProtonLink<?> link, String address) {
+        var info = getLinkInfo(container, link, address);
+        updateCredits(info, link);
+        info.getMsgs().incrementAndGet();
+    }
+
+    private static void markLinkAsReattached(String container, ProtonLink<?> link, String address) {
+        var info = getLinkInfo(container, link, address);
+        updateCredits(info, link);
+        info.setDetached(true);
+    }
+
+    private static void markLinkAsDetached(String container, ProtonLink<?> link, String address) {
+        var info = getLinkInfo(container, link, address);
+        updateCredits(info, link);
+        info.setDetached(true);
+    }
+
+    private static void updateCredits(LinkInfo info, ProtonLink<?> receiver) {
+        info.setCredits(receiver.getCredit());
+        info.setQueued(receiver.getQueued());
+    }
+
+    private static LinkInfo getLinkInfo(String container, ProtonLink<?> link, String address) {
+        String key = String.format("%s.%s.%s", container, link.getName(), address);
+        return numReceivedPerLink.computeIfAbsent(key, k -> new LinkInfo());
     }
 
 }
