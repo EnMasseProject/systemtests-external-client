@@ -372,11 +372,15 @@ public class TenantClient extends AbstractVerticle{
                     break;
             }
             if (delivery.remotelySettled()) {
-                vertx.setTimer(sendMMessagePeriod, id -> {
-                    context.runOnContext(c -> {
-                        sendMessage(address, sender);
+                if (sendMMessagePeriod > 0) {
+                    vertx.setTimer(sendMMessagePeriod, id -> {
+                        context.runOnContext(c -> {
+                            sendMessage(address, sender);
+                        });
                     });
-                });
+                } else {
+                    sendMessage(address, sender);
+                }
             }
         });
     }
